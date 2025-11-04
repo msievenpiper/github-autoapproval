@@ -72,11 +72,8 @@ func GetPullRequests(repo string) PullRequestContainer {
 		pr.Status = parts[3]
 		pr.CreatedDate = parts[4]
 
-		fmt.Println()
 		pullRequests.AddItem(pr)
 	}
-
-	fmt.Println(len(pullRequests.Requests))
 
 	return pullRequests
 }
