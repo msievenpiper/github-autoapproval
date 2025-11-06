@@ -1,6 +1,7 @@
 package internal
 
 import (
+	"encoding/json"
 	"fmt"
 	"log"
 	"strings"
@@ -9,11 +10,31 @@ import (
 )
 
 type PullRequest struct {
+	Repo        string
 	Number      string
 	Title       string
 	Branch      string
 	Status      string
 	CreatedDate string
+	State       PullRequestState
+}
+
+type PullRequestState struct {
+	LatestReviews []string `json:latestReviews`
+	State         string   `json:state`
+	author        string   `json:author`
+}
+
+func (p PullRequest) GetUrl() string {
+	return "https://github.com/" + p.Repo + "/pull/" + p.Number
+}
+
+func (p PullRequest) GetBranchUrl() string {
+	return "https://github.com/" + p.Repo + "/branch/" + p.Branch
+}
+
+func (p PullRequest) GetRepoUrl() string {
+	return "https://github.com/" + p.Repo
 }
 
 type PullRequestContainer struct {
@@ -31,7 +52,7 @@ func (c *PullRequestContainer) RemoveItem(pr PullRequest) *PullRequestContainer 
 	return c
 }
 
-func (c *PullRequestContainer) GetItem(id string) (found PullRequest, notFound bool) {
+func (c PullRequestContainer) GetItem(id string) (found PullRequest, notFound bool) {
 	f := func(item PullRequest) bool { return id == item.Number }
 	res := Filter(c.Requests, f)
 
@@ -46,9 +67,12 @@ func (c *PullRequestContainer) GetItem(id string) (found PullRequest, notFound b
 	return
 }
 
-func GetPullRequests(repo string) PullRequestContainer {
-	prs, _, err := gh.Exec("pr", "list", "--repo", repo, "--search", "translation-github-action")
+func GetPullRequests(repo string, branch string) PullRequestContainer {
+	prs, r, err := gh.Exec("pr", "list", "--repo", repo, "--search", branch)
 	if err != nil {
+		fmt.Println("Failed to get status for pr")
+		fmt.Println("approimate cmd: gh pr list --repo " + repo + " --search " + branch)
+		fmt.Println(r.String())
 		log.Fatal(err)
 	}
 
@@ -71,6 +95,8 @@ func GetPullRequests(repo string) PullRequestContainer {
 		pr.Branch = parts[2]
 		pr.Status = parts[3]
 		pr.CreatedDate = parts[4]
+		pr.Repo = repo
+		pr.State = getPullRequestStatus(pr)
 
 		pullRequests.AddItem(pr)
 	}
@@ -78,14 +104,40 @@ func GetPullRequests(repo string) PullRequestContainer {
 	return pullRequests
 }
 
-func ApprovePullRequest(repo string, pr PullRequest) bool {
-	_, _, err := gh.Exec("pr", "review", pr.Number, "--repo", repo, "--approve")
+func getPullRequestStatus(pr PullRequest) PullRequestState {
+	status, r, err := gh.Exec("pr", "view", pr.Number, "--repo", pr.Repo, "--json", "latestReviews,state,author")
 
 	if err != nil {
+		fmt.Println("Failed to get status for pr")
+		fmt.Println("approimate cmd: gh pr view " + pr.Number + " --repo " + pr.Repo + " --json latestReviews,state,author")
+		fmt.Println(r.String())
 		log.Fatal(err)
 	}
 
-	fmt.Println("Pull Request Approved - https://github.com/" + repo + "/pull/" + pr.Number)
+	var s PullRequestState
+
+	json.NewDecoder(strings.NewReader(status.String())).Decode(&s)
+
+	return s
+}
+
+func ApprovePullRequest(pr PullRequest, probe bool) bool {
+	if strings.Contains(strings.Join(pr.State.LatestReviews, ","), "approve") {
+		return true
+	}
+
+	if !probe {
+		_, r, err := gh.Exec("pr", "review", pr.Number, "--repo", pr.Repo, "--approve")
+
+		if err != nil {
+			fmt.Println("Failed to approve")
+			fmt.Println("approimate cmd: gh pr review " + pr.Number + " --repo " + pr.Repo + " --approve")
+			fmt.Println(r.String())
+			log.Fatal(err)
+		}
+	}
+
+	fmt.Println("Pull Request Approved - " + pr.GetUrl())
 
 	return true
 }

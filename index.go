@@ -2,16 +2,28 @@ package main
 
 import (
 	"github-autoapproval/v2/internal"
+	"log"
 )
 
 func main() {
-	availableRepos := [...]string{"protectednet/dashboard", "protectednet/www-total", "protectednet/legal"}
+	// Check auth first
+	_, err := internal.GetAuthState()
 
-	for _, repo := range availableRepos {
-		reqs := internal.GetPullRequests(repo)
+	if err != nil {
+		log.Fatal("There is no auth available")
+	}
+
+	input := internal.GetInputs()
+
+	if len(input.Repos) == 0 {
+		log.Fatal("There are no repositories available")
+	}
+
+	for _, repo := range input.Repos {
+		reqs := internal.GetPullRequests(repo, input.Branch)
 
 		for _, req := range reqs.Requests {
-			internal.ApprovePullRequest(repo, req)
+			internal.ApprovePullRequest(req, input.Probe)
 		}
 	}
 }
