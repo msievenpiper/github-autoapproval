@@ -10,16 +10,16 @@ import (
 )
 
 type PullRequestStateReviewAuthor struct {
-	Login string `json:login`
+	Login string `json:"login"`
 }
 
 type PullRequestStateReview struct {
-	Id                string                       `json:id`
-	Author            PullRequestStateReviewAuthor `json:author`
-	AuthorAssociation string                       `json:authorAssociation`
-	Body              string                       `json:body`
-	submittedAt       string                       `json:submittedAt`
-	State             string                       `json:state`
+	Id                string                       `json:"id"`
+	Author            PullRequestStateReviewAuthor `json:"author"`
+	AuthorAssociation string                       `json:"authorAssociation"`
+	Body              string                       `json:"body"`
+	SubmittedAt       string                       `json:"submittedAt"`
+	State             string                       `json:"state"`
 }
 
 func (s PullRequestStateReview) IsAppoved() bool {
@@ -27,9 +27,9 @@ func (s PullRequestStateReview) IsAppoved() bool {
 }
 
 type PullRequestState struct {
-	LatestReviews []PullRequestStateReview `json:latestReviews`
-	State         string                   `json:state`
-	author        string                   `json:author`
+	LatestReviews []PullRequestStateReview `json:"latestReviews"`
+	State         string                   `json:"state"`
+	Author        string                   `json:"author"`
 }
 
 func (s PullRequestState) IsAppoved() bool {
