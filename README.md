@@ -22,6 +22,12 @@ or multiple repos
 ./github-autoapproval --branch=example msievenpiper/github-autoapproval msievenpiper/example
 ```
 
+### Auto merging
+
+```bash
+./github-autoapproval --branch=example --merge msievenpiper/github-autoapproval
+```
+
 ## Dev
 ```bash
 go run index.go

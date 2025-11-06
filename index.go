@@ -24,6 +24,10 @@ func main() {
 
 		for _, req := range reqs.Requests {
 			internal.ApprovePullRequest(req, input.Probe)
+
+			if !input.Probe && input.Merge {
+				internal.MergePullRequest(req)
+			}
 		}
 	}
 }

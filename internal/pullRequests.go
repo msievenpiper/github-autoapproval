@@ -9,6 +9,39 @@ import (
 	"github.com/cli/go-gh/v2"
 )
 
+type PullRequestStateReviewAuthor struct {
+	Login string `json:login`
+}
+
+type PullRequestStateReview struct {
+	Id                string                       `json:id`
+	Author            PullRequestStateReviewAuthor `json:author`
+	AuthorAssociation string                       `json:authorAssociation`
+	Body              string                       `json:body`
+	submittedAt       string                       `json:submittedAt`
+	State             string                       `json:state`
+}
+
+func (s PullRequestStateReview) IsAppoved() bool {
+	return strings.Contains(strings.ToLower(s.State), "approve")
+}
+
+type PullRequestState struct {
+	LatestReviews []PullRequestStateReview `json:latestReviews`
+	State         string                   `json:state`
+	author        string                   `json:author`
+}
+
+func (s PullRequestState) IsAppoved() bool {
+	for _, el := range s.LatestReviews {
+		if el.IsAppoved() {
+			return true
+		}
+	}
+
+	return false
+}
+
 type PullRequest struct {
 	Repo        string
 	Number      string
@@ -17,12 +50,6 @@ type PullRequest struct {
 	Status      string
 	CreatedDate string
 	State       PullRequestState
-}
-
-type PullRequestState struct {
-	LatestReviews []string `json:latestReviews`
-	State         string   `json:state`
-	author        string   `json:author`
 }
 
 func (p PullRequest) GetUrl() string {
@@ -35,6 +62,10 @@ func (p PullRequest) GetBranchUrl() string {
 
 func (p PullRequest) GetRepoUrl() string {
 	return "https://github.com/" + p.Repo
+}
+
+func (p PullRequest) IsAppoved() bool {
+	return p.State.IsAppoved()
 }
 
 type PullRequestContainer struct {
@@ -122,7 +153,7 @@ func getPullRequestStatus(pr PullRequest) PullRequestState {
 }
 
 func ApprovePullRequest(pr PullRequest, probe bool) bool {
-	if strings.Contains(strings.Join(pr.State.LatestReviews, ","), "approve") {
+	if pr.IsAppoved() {
 		return true
 	}
 
@@ -138,6 +169,23 @@ func ApprovePullRequest(pr PullRequest, probe bool) bool {
 	}
 
 	fmt.Println("Pull Request Approved - " + pr.GetUrl())
+
+	return true
+}
+
+func MergePullRequest(pr PullRequest) bool {
+	if pr.IsAppoved() {
+		return false
+	}
+
+	_, r, err := gh.Exec("pr", "merge", pr.Number, "--repo", pr.Repo)
+
+	if err != nil {
+		fmt.Println("Failed to get status for pr")
+		fmt.Println("approimate cmd: gh pr merge " + pr.Number + " --repo " + pr.Repo)
+		fmt.Println(r.String())
+		log.Fatal(err)
+	}
 
 	return true
 }
