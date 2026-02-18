@@ -28,6 +28,44 @@ or multiple repos
 ./github-autoapproval --branch=example --merge msievenpiper/github-autoapproval
 ```
 
+## Config files
+
+Instead of passing flags every time, you can store settings in a JSON config file and load it with `--config`.
+
+### Creating a config
+
+Run the interactive wizard:
+
+```bash
+./github-autoapproval --init
+```
+
+You'll be prompted for a name (or path), branch, repos, probe mode, and auto-merge. Config files are saved to the `configs/` folder by default (gitignored, so credentials/repo lists stay local).
+
+### Using a config
+
+```bash
+./github-autoapproval --config=configs/my-project.json
+```
+
+CLI flags always override config values when both are provided:
+
+```bash
+# Use config but override the branch
+./github-autoapproval --config=configs/my-project.json --branch=other-branch
+```
+
+### Config file format
+
+```json
+{
+  "branch": "my-feature-branch",
+  "repos": ["owner/repo-a", "owner/repo-b"],
+  "probe": false,
+  "merge": true
+}
+```
+
 ## Dev
 ```bash
 go run index.go

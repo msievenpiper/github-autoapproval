@@ -6,14 +6,19 @@ import (
 )
 
 func main() {
+	input := internal.GetInputs()
+
+	if input.Init {
+		internal.RunConfigWizard()
+		return
+	}
+
 	// Check auth first
 	_, err := internal.GetAuthState()
 
 	if err != nil {
 		log.Fatal("There is no auth available")
 	}
-
-	input := internal.GetInputs()
 
 	if len(input.Repos) == 0 {
 		log.Fatal("There are no repositories available")
