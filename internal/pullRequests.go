@@ -174,7 +174,7 @@ func ApprovePullRequest(pr PullRequest, probe bool) bool {
 }
 
 func MergePullRequest(pr PullRequest) bool {
-	if pr.IsAppoved() {
+	if !pr.IsAppoved() {
 		return false
 	}
 
