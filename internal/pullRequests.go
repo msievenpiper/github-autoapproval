@@ -178,7 +178,7 @@ func MergePullRequest(pr PullRequest) bool {
 		return false
 	}
 
-	_, r, err := gh.Exec("pr", "merge", pr.Number, "--repo", pr.Repo)
+	_, r, err := gh.Exec("pr", "merge", pr.Number, "--repo", pr.Repo, "--auto")
 
 	if err != nil {
 		fmt.Println("Failed to get status for pr")
