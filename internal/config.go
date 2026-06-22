@@ -7,10 +7,11 @@ import (
 )
 
 type Config struct {
-	Branch string   `json:"branch"`
-	Repos  []string `json:"repos"`
-	Probe  bool     `json:"probe"`
-	Merge  bool     `json:"merge"`
+	Branch        string   `json:"branch"`
+	Repos         []string `json:"repos"`
+	Probe         bool     `json:"probe"`
+	Merge         bool     `json:"merge"`
+	MergeStrategy string   `json:"mergeStrategy"`
 }
 
 func LoadConfig(path string) (Config, error) {
