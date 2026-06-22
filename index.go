@@ -31,7 +31,7 @@ func main() {
 			internal.ApprovePullRequest(req, input.Probe)
 
 			if !input.Probe && input.Merge {
-				internal.MergePullRequest(req)
+				internal.MergePullRequest(req, input.MergeStrategy)
 			}
 		}
 	}

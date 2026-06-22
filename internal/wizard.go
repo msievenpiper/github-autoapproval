@@ -57,11 +57,17 @@ func RunConfigWizard() {
 	probe := promptBool(scanner, "Probe mode? (y/N): ")
 	merge := promptBool(scanner, "Auto-merge? (y/N): ")
 
+	mergeStrategy := "squash"
+	if merge {
+		mergeStrategy = promptMergeStrategy(scanner)
+	}
+
 	cfg := Config{
-		Branch: branch,
-		Repos:  repos,
-		Probe:  probe,
-		Merge:  merge,
+		Branch:        branch,
+		Repos:         repos,
+		Probe:         probe,
+		Merge:         merge,
+		MergeStrategy: mergeStrategy,
 	}
 
 	if err := os.MkdirAll(filepath.Dir(savePath), 0755); err != nil {
@@ -91,6 +97,23 @@ func promptRequired(scanner *bufio.Scanner, message string) string {
 			return val
 		}
 		fmt.Println("  (required, please enter a value)")
+	}
+}
+
+func promptMergeStrategy(scanner *bufio.Scanner) string {
+	for {
+		fmt.Print("Merge strategy (squash/merge/rebase) [squash]: ")
+		if !scanner.Scan() {
+			return "squash"
+		}
+		val := strings.ToLower(strings.TrimSpace(scanner.Text()))
+		if val == "" {
+			return "squash"
+		}
+		if val == "squash" || val == "merge" || val == "rebase" {
+			return val
+		}
+		fmt.Println("  (must be squash, merge, or rebase)")
 	}
 }
 

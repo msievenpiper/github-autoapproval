@@ -173,16 +173,24 @@ func ApprovePullRequest(pr PullRequest, probe bool) bool {
 	return true
 }
 
-func MergePullRequest(pr PullRequest) bool {
+func MergePullRequest(pr PullRequest, strategy string) bool {
 	if !pr.IsAppoved() {
 		return false
 	}
 
-	_, r, err := gh.Exec("pr", "merge", pr.Number, "--repo", pr.Repo, "--auto")
+	strategyFlag := "--squash"
+	switch strategy {
+	case "merge":
+		strategyFlag = "--merge"
+	case "rebase":
+		strategyFlag = "--rebase"
+	}
+
+	_, r, err := gh.Exec("pr", "merge", pr.Number, "--repo", pr.Repo, strategyFlag)
 
 	if err != nil {
-		fmt.Println("Failed to get status for pr")
-		fmt.Println("approimate cmd: gh pr merge " + pr.Number + " --repo " + pr.Repo)
+		fmt.Println("Failed to merge pr")
+		fmt.Println("approimate cmd: gh pr merge " + pr.Number + " --repo " + pr.Repo + " " + strategyFlag)
 		fmt.Println(r.String())
 		log.Fatal(err)
 	}
