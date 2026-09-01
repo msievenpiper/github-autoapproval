@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"strings"
+	"time"
 
 	"github.com/cli/go-gh/v2"
 )
@@ -173,6 +174,66 @@ func ApprovePullRequest(pr PullRequest, probe bool) bool {
 	return true
 }
 
+// isOutOfDateMergeError detects the class of gh/GitHub errors that occur when
+// a PR's branch has fallen behind its base (e.g. because another PR merged
+// first), as opposed to other merge failures like missing checks/approvals.
+func isOutOfDateMergeError(output string) bool {
+	lower := strings.ToLower(output)
+	substrs := []string{
+		"not mergeable",
+		"base branch was modified",
+		"out of date",
+		"review and try the merge again",
+	}
+
+	for _, s := range substrs {
+		if strings.Contains(lower, s) {
+			return true
+		}
+	}
+
+	return false
+}
+
+// updatePullRequestBranch merges the base branch into the PR's branch,
+// equivalent to clicking "Update branch" on GitHub.
+func updatePullRequestBranch(pr PullRequest) error {
+	_, r, err := gh.Exec("pr", "update-branch", pr.Number, "--repo", pr.Repo)
+	if err != nil {
+		return fmt.Errorf("%v: %s", err, r.String())
+	}
+
+	return nil
+}
+
+type prMergeState struct {
+	Mergeable        string `json:"mergeable"`
+	MergeStateStatus string `json:"mergeStateStatus"`
+}
+
+// waitForMergeable polls the PR until GitHub reports it as mergeable and no
+// longer behind/dirty, or until timeout elapses.
+func waitForMergeable(pr PullRequest, timeout time.Duration) bool {
+	deadline := time.Now().Add(timeout)
+
+	for time.Now().Before(deadline) {
+		status, _, err := gh.Exec("pr", "view", pr.Number, "--repo", pr.Repo, "--json", "mergeable,mergeStateStatus")
+
+		if err == nil {
+			var s prMergeState
+			json.NewDecoder(strings.NewReader(status.String())).Decode(&s)
+
+			if s.Mergeable == "MERGEABLE" && s.MergeStateStatus != "BEHIND" && s.MergeStateStatus != "DIRTY" && s.MergeStateStatus != "UNKNOWN" {
+				return true
+			}
+		}
+
+		time.Sleep(5 * time.Second)
+	}
+
+	return false
+}
+
 func MergePullRequest(pr PullRequest, strategy string) bool {
 	if !pr.IsAppoved() {
 		return false
@@ -186,14 +247,41 @@ func MergePullRequest(pr PullRequest, strategy string) bool {
 		strategyFlag = "--rebase"
 	}
 
-	_, r, err := gh.Exec("pr", "merge", pr.Number, "--repo", pr.Repo, strategyFlag)
+	const maxAttempts = 3
+	var lastErr error
+	var lastOutput string
 
-	if err != nil {
-		fmt.Println("Failed to merge pr")
-		fmt.Println("approimate cmd: gh pr merge " + pr.Number + " --repo " + pr.Repo + " " + strategyFlag)
-		fmt.Println(r.String())
-		log.Fatal(err)
+	for attempt := 1; attempt <= maxAttempts; attempt++ {
+		_, r, err := gh.Exec("pr", "merge", pr.Number, "--repo", pr.Repo, strategyFlag)
+
+		if err == nil {
+			return true
+		}
+
+		lastErr = err
+		lastOutput = r.String()
+
+		if attempt == maxAttempts || !isOutOfDateMergeError(lastOutput) {
+			break
+		}
+
+		fmt.Println("Pull Request is behind the base branch, updating and retrying - " + pr.GetUrl())
+
+		if updateErr := updatePullRequestBranch(pr); updateErr != nil {
+			fmt.Println("Failed to update branch for " + pr.GetUrl() + ": " + updateErr.Error())
+			break
+		}
+
+		if !waitForMergeable(pr, 2*time.Minute) {
+			fmt.Println("Timed out waiting for " + pr.GetUrl() + " to become mergeable after update")
+			break
+		}
 	}
 
-	return true
+	fmt.Println("Failed to merge pr")
+	fmt.Println("approimate cmd: gh pr merge " + pr.Number + " --repo " + pr.Repo + " " + strategyFlag)
+	fmt.Println(lastOutput)
+	log.Fatal(lastErr)
+
+	return false
 }

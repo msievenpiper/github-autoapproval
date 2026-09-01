@@ -24,6 +24,13 @@ func main() {
 		log.Fatal("There are no repositories available")
 	}
 
+	lock, ok := internal.AcquireRunLock()
+	if !ok {
+		log.Println("Another instance is already running, skipping this run")
+		return
+	}
+	defer lock.Release()
+
 	for _, repo := range input.Repos {
 		reqs := internal.GetPullRequests(repo, input.Branch)
 
