@@ -32,10 +32,16 @@ func main() {
 	defer lock.Release()
 
 	for _, repo := range input.Repos {
-		reqs := internal.GetPullRequests(repo, input.Branch)
+		reqs, err := internal.GetPullRequests(repo, input.Branch)
+		if err != nil {
+			log.Println("Skipping repo " + repo + ": " + err.Error())
+			continue
+		}
 
 		for _, req := range reqs.Requests {
-			internal.ApprovePullRequest(req, input.Probe)
+			if !internal.ApprovePullRequest(req, input.Probe) {
+				continue
+			}
 
 			if !input.Probe && input.Merge {
 				internal.MergePullRequest(req, input.MergeStrategy)

@@ -3,7 +3,6 @@ package internal
 import (
 	"encoding/json"
 	"fmt"
-	"log"
 	"strings"
 	"time"
 
@@ -99,7 +98,7 @@ func (c PullRequestContainer) GetItem(id string) (found PullRequest, notFound bo
 	return
 }
 
-func GetPullRequests(repo string, branch string) PullRequestContainer {
+func GetPullRequests(repo string, branch string) (PullRequestContainer, error) {
 	// --head matches on the PR's source branch; --search is free-text and also
 	// matches unrelated PRs that merely mention the branch name in their body.
 	prs, r, err := gh.Exec("pr", "list", "--repo", repo, "--head", branch)
@@ -107,7 +106,7 @@ func GetPullRequests(repo string, branch string) PullRequestContainer {
 		fmt.Println("Failed to get status for pr")
 		fmt.Println("approimate cmd: gh pr list --repo " + repo + " --head " + branch)
 		fmt.Println(r.String())
-		log.Fatal(err)
+		return PullRequestContainer{}, err
 	}
 
 	data := strings.Split(prs.String(), "\n")
@@ -130,29 +129,35 @@ func GetPullRequests(repo string, branch string) PullRequestContainer {
 		pr.Status = parts[3]
 		pr.CreatedDate = parts[4]
 		pr.Repo = repo
-		pr.State = getPullRequestStatus(pr)
+
+		state, err := getPullRequestStatus(pr)
+		if err != nil {
+			fmt.Println("Skipping " + pr.GetUrl() + ": " + err.Error())
+			continue
+		}
+		pr.State = state
 
 		pullRequests.AddItem(pr)
 	}
 
-	return pullRequests
+	return pullRequests, nil
 }
 
-func getPullRequestStatus(pr PullRequest) PullRequestState {
+func getPullRequestStatus(pr PullRequest) (PullRequestState, error) {
 	status, r, err := gh.Exec("pr", "view", pr.Number, "--repo", pr.Repo, "--json", "latestReviews,state,author")
 
 	if err != nil {
 		fmt.Println("Failed to get status for pr")
 		fmt.Println("approimate cmd: gh pr view " + pr.Number + " --repo " + pr.Repo + " --json latestReviews,state,author")
 		fmt.Println(r.String())
-		log.Fatal(err)
+		return PullRequestState{}, err
 	}
 
 	var s PullRequestState
 
 	json.NewDecoder(strings.NewReader(status.String())).Decode(&s)
 
-	return s
+	return s, nil
 }
 
 func ApprovePullRequest(pr PullRequest, probe bool) bool {
@@ -167,7 +172,8 @@ func ApprovePullRequest(pr PullRequest, probe bool) bool {
 			fmt.Println("Failed to approve")
 			fmt.Println("approimate cmd: gh pr review " + pr.Number + " --repo " + pr.Repo + " --approve")
 			fmt.Println(r.String())
-			log.Fatal(err)
+			fmt.Println(err)
+			return false
 		}
 	}
 
@@ -283,7 +289,7 @@ func MergePullRequest(pr PullRequest, strategy string) bool {
 	fmt.Println("Failed to merge pr")
 	fmt.Println("approimate cmd: gh pr merge " + pr.Number + " --repo " + pr.Repo + " " + strategyFlag)
 	fmt.Println(lastOutput)
-	log.Fatal(lastErr)
+	fmt.Println(lastErr)
 
 	return false
 }
