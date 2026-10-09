@@ -100,10 +100,12 @@ func (c PullRequestContainer) GetItem(id string) (found PullRequest, notFound bo
 }
 
 func GetPullRequests(repo string, branch string) PullRequestContainer {
-	prs, r, err := gh.Exec("pr", "list", "--repo", repo, "--search", branch)
+	// --head matches on the PR's source branch; --search is free-text and also
+	// matches unrelated PRs that merely mention the branch name in their body.
+	prs, r, err := gh.Exec("pr", "list", "--repo", repo, "--head", branch)
 	if err != nil {
 		fmt.Println("Failed to get status for pr")
-		fmt.Println("approimate cmd: gh pr list --repo " + repo + " --search " + branch)
+		fmt.Println("approimate cmd: gh pr list --repo " + repo + " --head " + branch)
 		fmt.Println(r.String())
 		log.Fatal(err)
 	}
@@ -118,7 +120,7 @@ func GetPullRequests(repo string, branch string) PullRequestContainer {
 		pr := PullRequest{}
 		parts := strings.Split(element, "\t")
 
-		if len(parts) != 5 {
+		if len(parts) != 5 || parts[2] != branch {
 			continue
 		}
 
