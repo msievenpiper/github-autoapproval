@@ -182,27 +182,6 @@ func ApprovePullRequest(pr PullRequest, probe bool) bool {
 	return true
 }
 
-// isOutOfDateMergeError detects the class of gh/GitHub errors that occur when
-// a PR's branch has fallen behind its base (e.g. because another PR merged
-// first), as opposed to other merge failures like missing checks/approvals.
-func isOutOfDateMergeError(output string) bool {
-	lower := strings.ToLower(output)
-	substrs := []string{
-		"not mergeable",
-		"base branch was modified",
-		"out of date",
-		"review and try the merge again",
-	}
-
-	for _, s := range substrs {
-		if strings.Contains(lower, s) {
-			return true
-		}
-	}
-
-	return false
-}
-
 // updatePullRequestBranch merges the base branch into the PR's branch,
 // equivalent to clicking "Update branch" on GitHub.
 func updatePullRequestBranch(pr PullRequest) error {
@@ -219,18 +198,36 @@ type prMergeState struct {
 	MergeStateStatus string `json:"mergeStateStatus"`
 }
 
+func getMergeState(pr PullRequest) (prMergeState, error) {
+	var s prMergeState
+
+	status, _, err := gh.Exec("pr", "view", pr.Number, "--repo", pr.Repo, "--json", "mergeable,mergeStateStatus")
+	if err != nil {
+		return s, err
+	}
+
+	err = json.NewDecoder(strings.NewReader(status.String())).Decode(&s)
+	return s, err
+}
+
+// isBehindBase asks GitHub whether the PR's branch has fallen behind its base
+// (e.g. because another PR merged first). Other merge failures such as pending
+// required checks are not fixed by updating the branch, and updating anyway
+// pushes a new commit that restarts CI.
+func isBehindBase(pr PullRequest) bool {
+	s, err := getMergeState(pr)
+	return err == nil && s.MergeStateStatus == "BEHIND"
+}
+
 // waitForMergeable polls the PR until GitHub reports it as mergeable and no
 // longer behind/dirty, or until timeout elapses.
 func waitForMergeable(pr PullRequest, timeout time.Duration) bool {
 	deadline := time.Now().Add(timeout)
 
 	for time.Now().Before(deadline) {
-		status, _, err := gh.Exec("pr", "view", pr.Number, "--repo", pr.Repo, "--json", "mergeable,mergeStateStatus")
+		s, err := getMergeState(pr)
 
 		if err == nil {
-			var s prMergeState
-			json.NewDecoder(strings.NewReader(status.String())).Decode(&s)
-
 			if s.Mergeable == "MERGEABLE" && s.MergeStateStatus != "BEHIND" && s.MergeStateStatus != "DIRTY" && s.MergeStateStatus != "UNKNOWN" {
 				return true
 			}
@@ -242,11 +239,10 @@ func waitForMergeable(pr PullRequest, timeout time.Duration) bool {
 	return false
 }
 
+// MergePullRequest expects the caller to have already approved the PR via
+// ApprovePullRequest; pr.State is fetched before approval so it can't be used
+// to check that here.
 func MergePullRequest(pr PullRequest, strategy string) bool {
-	if !pr.IsAppoved() {
-		return false
-	}
-
 	strategyFlag := "--squash"
 	switch strategy {
 	case "merge":
@@ -269,7 +265,7 @@ func MergePullRequest(pr PullRequest, strategy string) bool {
 		lastErr = err
 		lastOutput = r.String()
 
-		if attempt == maxAttempts || !isOutOfDateMergeError(lastOutput) {
+		if attempt == maxAttempts || !isBehindBase(pr) {
 			break
 		}
 
